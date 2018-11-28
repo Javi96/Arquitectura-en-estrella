@@ -1,0 +1,207 @@
+fmod RED is
+ pr NAT .
+ pr STRING .
+
+ sorts Localizacion Sistema Contenidos Nodo Msj Socket ListaMsj Id ListaId Par Hash Estado .
+
+ subsort Localizacion Socket < Sistema .
+ subsort Nodo Msj < Contenidos .
+ subsort Msj < ListaMsj .
+ subsort Id < ListaId .
+ subsort Par < Hash .
+
+ ***-----------------------------------------------------------
+ 
+ op inactivo : -> Estado [ctor] .
+ op esperando : -> Estado [ctor] .
+ op activo : -> Estado [ctor] .
+
+ op id(_) : Nat -> Id [ctor].
+ op [_-_] : Id Nat -> Par [ctor].
+
+ op none : -> Sistema [ctor] .
+ op __ : Sistema Sistema -> Sistema [ctor assoc comm id: none] .
+
+ op emptyCont : -> Contenidos [ctor] .
+ op _,_ : Contenidos Contenidos -> Contenidos [ctor assoc comm id: emptyCont] .
+
+ op emptyMsj : -> ListaMsj [ctor] .
+ op __ : ListaMsj ListaMsj -> ListaMsj [ctor assoc id: emptyMsj] .
+
+ op alone : -> ListaId [ctor] .
+ op __ : ListaId ListaId -> ListaId [ctor assoc comm id: alone] .
+
+ op emptyHash : -> Hash [ctor] .
+ op __ : Hash Hash -> Hash [ctor assoc comm id: emptyHash] .
+
+ op {_|_} : Nat Contenidos -> Localizacion [ctor] .
+
+ op <_|_;_|_> : Nat ListaMsj ListaMsj Nat -> Socket [ctor] .
+
+ op ex(_|_|_|_|_) : Id Nat Estado ListaId String -> Nodo [ctor].
+ op in(_|_|_) : Id Hash Estado -> Nodo [ctor].
+
+ op info(_,_|_) : Nat Nat Id -> Msj [ctor].
+ op resp(_) : Id -> Msj [ctor].
+ op to(_-_) : Id String -> Msj [ctor].
+ 
+ ***-----------------------------------------------------------
+
+ var L : Localizacion .
+ var S : Sistema .
+
+ op numNodos : Sistema -> Nat .
+ eq numNodos(S) = 0 [owise] .
+ eq numNodos(L S) = 1 + numNodos(S) .
+
+endfm
+
+
+***_________________________________________________________***
+***_________________________________________________________***
+***_________________________________________________________***
+***_________________________________________________________***
+
+
+
+mod COMPORTAMIENTO is
+ *** Importa los modulos correspondientes
+ pr NAT .
+ pr STRING .
+ pr RED .
+
+ var N N' N'' : Nat .
+ var S S' : String .
+ var E E' : Estado .
+ var ID ID' ID'' : Id .
+ var H : Hash .
+ var LId : ListaId .
+ var LMex LMin : ListaMsj .
+ var C C' : Contenidos .
+
+ *** Define el comportamiento de la red mediante reglas
+ rl [procesa] : { N | ex( ID | N' | activo | LId | S ) , to( ID - S' ) , C } =>
+ { N | ex( ID | N' | activo | LId | S + S' ) , C } .
+
+ crl [enviaEx] : { N | ex( ID | N' | activo | LId | S ) , to( ID'' - S' ) , C } < N | LMex ; LMin | N' > =>
+ { N | ex( ID | N' | activo | LId | S ) , C } < N | LMex ; LMin to( ID'' - S' ) | N' >
+ if ( ID =/= ID'' ) .
+
+ rl [leeIn] : { N' | in( ID' | H | activo ) , C' } < N | LMex ; to( ID'' - S' ) LMin | N' > =>
+ { N' | in( ID' | H | activo ) , to( ID'' - S' ), C' } < N | LMex ; LMin | N' > .
+ 
+ rl [enviaIn] : { N' | in( ID' | [ ID'' - N ] H | activo ) , to( ID'' - S' ), C' } < N | LMex ; LMin | N' > =>
+ { N' | in( ID' | [ ID'' - N ] H | activo ) , C' } < N | LMex to( ID'' - S' ) ; LMin | N' > .
+
+ rl [leeEx] : { N | ex( ID | N' | activo | LId | S ) , C } < N | to( ID'' - S' ) LMex ; LMin | N' > =>
+ { N | ex( ID | N' | activo | LId | S ) , to( ID'' - S' ) , C }  < N | LMex ; LMin | N' > .
+
+ rl [pideConexion] : { N | ex( ID | N' | inactivo | LId | S ) , C } < N | LMex ; LMin | N' > =>
+ { N | ex( ID | N' | esperando | LId | S ) , C } < N | LMex ; LMin info( N' , N | ID ) | N' > .
+
+ rl [leeConexion] : { N' | in( ID' | H | E' ) , C' } < N | LMex ; info( N' , N | ID ) LMin | N' > =>
+ { N' | in( ID' | H | E' ) , info( N' , N | ID ) , C' } < N | LMex ; LMin | N' > .
+
+ rl [enviaRespuesta] : { N' | in( ID' | H | E' ) , info( N' , N | ID ) , C' } < N | LMex ; LMin | N' > =>
+ { N' | in( ID' | [ ID - N ] H | activo ) , C' } < N | LMex resp( ID ) ; LMin | N' > .
+
+ rl [leeRespuesta] : { N | ex( ID | N' | esperando | LId | S ) , C } < N | resp( ID ) LMex ; LMin | N' > =>
+ { N | ex( ID | N' | esperando | LId | S ) , resp( ID ) , C } < N | LMex ; LMin | N' > .
+
+ rl [activa] : { N | ex( ID | N' | esperando | LId | S ) , resp( ID ), C } =>
+ { N | ex( ID | N' | activo | LId | S ) , C } .
+
+ rl [saluda] : { N | ex( ID | N' | activo | ID'' LId  | S ) , C } < N | LMex ; LMin | N' > =>
+ { N | ex( ID | N' | activo | LId | S ) , C } < N | LMex ; LMin to( ID'' - "hola" ) | N' > .
+
+endm
+
+mod EJEMPLO is
+ pr RED .
+ pr COMPORTAMIENTO .
+
+ op init : -> Sistema .
+
+ *** Define un término inicial sobre el que probar las propiedades siguiendo el enunciado
+ *** red init = { 0 | ... } *** Dentro habrá un nodo
+ ***            { 1 | ... }
+ ***            ...
+ ***            < 0 | ... ; ... | 1 > *** Socket que une 0 y 1. Los puntos suspensivos serán listas vacías
+
+ eq init = 	{ 1 | ex( id( 11 ) | 666 | inactivo | id( 22 ) id( 33 ) | "" ) }
+ 			{ 2 | ex( id( 22 ) | 666 | inactivo | id( 11 ) id( 33 ) | "" ) }
+ 			{ 3 | ex( id( 33 ) | 666 | inactivo | id( 11 ) id( 22 ) | "" ) }
+ 			{ 666 | in( id( 44 ) | emptyHash | inactivo ) }
+ 			< 1 | emptyMsj ; emptyMsj | 666 >
+ 			< 2 | emptyMsj ; emptyMsj | 666 >
+ 			< 3 | emptyMsj ; emptyMsj | 666 > .
+endm
+
+rew init .
+
+*** search init =>* S:Sistema s.t. numNodos(S:Sistema) == numNodos(init) .
+
+load model-checker
+
+mod PROPS is
+ *** Importa los modulos correspondientes
+ pr SATISFACTION .
+ pr RED .
+ pr COMPORTAMIENTO .
+
+ subsort Sistema < State .
+
+ var N N' : Nat .
+ var S S' : String .
+ var E : Estado .
+ var M : Msj .
+ var ID ID' : Id .
+ var H : Hash .
+ var LId : ListaId .
+ var LMex LMin LMex' LMin' : ListaMsj .
+ var C : Contenidos .
+ var Sis : Sistema .
+
+ *** Define las propiedades
+
+ op existe : Id -> Prop [ctor] .
+ eq { N | ex( ID | N' | E | LId | S ) , C } Sis |= existe(ID) = true .
+ eq { N' | in( ID | H | E ) , C } Sis |= existe(ID) = true .
+
+ op amigo : Id Id -> Prop [ctor] .
+ eq { N | ex( ID | N' | E | ID' LId | S ) , C } Sis |= amigo(ID,ID') = true .
+
+ op toMsj : Id -> Prop [ctor] .
+ eq { N | ex( ID' | N' | E | LId | S ) , to( ID - S' ) , C } Sis |= toMsj(ID) = true .
+ eq { N' | in( ID' | H | E ) , to( ID - S' ) , C } Sis |= toMsj(ID) = true .
+ eq < N | LMex to( ID - S' ) LMex' ; LMin | N' > Sis |= toMsj(ID) = true .
+ eq < N | LMex ; LMin to( ID - S' ) LMin' | N' > Sis |= toMsj(ID) = true .
+
+ op hay : Nat -> Prop [ctor] .
+ eq Sis |= hay(N) = numNodos(Sis) == N .
+
+ op socketVacio : Nat Nat -> Prop [ctor] .
+ eq < N | emptyMsj ; emptyMsj | N' > Sis |= socketVacio(N,N') = true .
+
+ op numEx : Nat -> Prop [ctor] .
+ eq Sis |= numEx(N) = numNodos(Sis) == s(N) .
+
+endm
+
+mod TEST is
+ *** Importa los modulos correspondientes
+pr LTL-SIMPLIFIER .
+pr MODEL-CHECKER .
+pr PROPS .
+pr EJEMPLO .
+
+endm
+
+*** Define y comprueba las propiedades
+
+red modelCheck 	(init,  [] ( hay(4) /\ numEx(3) ) /\
+						[] ( ( existe(ID:Id) /\ amigo( ID':Id , ID:Id ) ) -> <> toMsj(ID:Id) ) /\
+						[] ( toMsj(ID:Id) -> <> ( ~ [] (toMsj(ID:Id)) ) ) 									*** Para cada mensaje alguna vez nunca esta
+				) .
+
+eof						
