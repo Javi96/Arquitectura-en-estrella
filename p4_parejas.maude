@@ -139,7 +139,7 @@ endm
 
 rew init .
 
-*** search init =>* S:Sistema s.t. numNodos(S:Sistema) == numNodos(init) .
+search init =>* S:Sistema s.t. numNodos(S:Sistema) =/= numNodos(init) .
 
 load model-checker
 
