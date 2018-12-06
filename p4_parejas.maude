@@ -172,6 +172,7 @@ mod PROPS is
  eq { N | ex( ID | N' | E | ID' LId | S ) , C } Sis |= amigo(ID,ID') = true .
 
  op toMsj : Id -> Prop [ctor] .
+ eq { N | ex( ID | N' | E | LId | S ) , to( ID - S' ) , C } Sis |= toMsj(ID) = true .
  eq { N | ex( ID' | N' | E | LId | S ) , to( ID - S' ) , C } Sis |= toMsj(ID) = true .
  eq { N' | in( ID' | H | E ) , to( ID - S' ) , C } Sis |= toMsj(ID) = true .
  eq < N | LMex to( ID - S' ) LMex' ; LMin | N' > Sis |= toMsj(ID) = true .
@@ -204,4 +205,28 @@ red modelCheck 	(init,  [] ( hay(4) /\ numEx(3) ) /\
 						[] ( toMsj(ID:Id) -> <> ( ~ [] (toMsj(ID:Id)) ) ) 									*** Para cada mensaje alguna vez nunca esta
 				) .
 
-eof						
+eof
+
+*** (
+
+APARTADO 20:
+
+En los mensajes de tipo "to" podríamos añadir dos parámetro adicionales:
+- Un parámetro "from" indicaría el nodo que ha envíado dicho mensaje.
+- Un parámetro "state" se correpondería con el estado del mensaje.
+	- "sent" para los mensajes recién enviados.
+	- "reply" si se trata de la respuesta.
+RESULTADO: to (IDdst - String | IDsrc | tipo)
+
+En el procesamiento del mensaje:
+Deberemos distinguir entre dos casos según sea un mensaje nuevo o se trate de una respuesta. En caso de un mensaje nuevo se procesará y se enviará la respuesta al nodo que figure en el parámetro "from". Si es una respuesta solamente se procesará.
+
+Propiedad:
+
+Debemos adaptar la propiedad toMsj definidad anteriormente para que incluya los nuevos parámetros.
+También deberíamos definir la propiedad toRsp para comprobar si existe la respuesta al correspondiente mensaje to.
+A partir de ahora debemos tener en cuenta el contenido del mensaje para distinguir entre las respuestas a un mismo emisor.
+
+[] ( toMsj(ID:Id,ID':Id,S:String) -> <> ( ~ [] (toMsj(ID:Id,ID':Id,S:String)) /\ toRsp(ID:Id,ID':Id,S:String) ) )
+
+) ***			

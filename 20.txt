@@ -3,10 +3,18 @@ En los mensajes de tipo "to" podríamos añadir dos parámetro adicionales:
 - Un parámetro "state" se correpondería con el estado del mensaje.
 	- "sent" para los mensajes recién enviados.
 	- "reply" si se trata de la respuesta.
+RESULTADO: to (IDdst - String | IDsrc | tipo)
 
 En el procesamiento del mensaje:
 Deberemos distinguir entre dos casos según sea un mensaje nuevo o se trate de una respuesta. En caso de un mensaje nuevo se procesará y se enviará la respuesta al nodo que figure en el parámetro "from". Si es una respuesta solamente se procesará.
 
+Propiedad:
+
+Debemos adaptar la propiedad toMsj definidad anteriormente para que incluya los nuevos parámetros.
+También deberíamos definir la propiedad toRsp para comprobar si existe la respuesta al correspondiente mensaje to.
+A partir de ahora debemos tener en cuenta el contenido del mensaje para distinguir entre las respuestas a un mismo emisor.
+
+[] ( toMsj(ID:Id,ID':Id,S:String) -> <> ( ~ [] (toMsj(ID:Id,ID':Id,S:String)) /\ toRsp(ID:Id,ID':Id,S:String) ) )
 
 
 
