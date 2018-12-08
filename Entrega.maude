@@ -1,0 +1,331 @@
+***__________________________________________________________________________________________________________________
+***	Práctica 4 - Aitor Cayón Ruano y José Javier Cortés Tejada
+***__________________________________________________________________________________________________________________
+
+
+fmod RED is
+ pr NAT .
+ pr STRING .
+
+ sorts Localizacion Sistema Contenidos Nodo Msj Socket ListaMsj Id ListaId Par Hash Estado .
+
+ subsort Localizacion Socket < Sistema .
+ subsort Nodo Msj < Contenidos .
+ subsort Msj < ListaMsj .
+ subsort Id < ListaId .
+ subsort Par < Hash .
+
+***__________________________________________________________________________________________________________________
+
+*** ----- Estados ----- 
+ op inactivo : -> Estado [ctor] .
+ op esperando : -> Estado [ctor] .
+ op activo : -> Estado [ctor] .
+
+*** ----- Identificador ----- 
+
+ op id(_) : Nat -> Id [ctor].
+ op [_-_] : Id Nat -> Par [ctor].
+
+*** ----- Sistema ----- 
+
+ op none : -> Sistema [ctor] .
+ op __ : Sistema Sistema -> Sistema [ctor assoc comm id: none] .
+
+*** ----- Contenidos ----- 
+
+ op emptyCont : -> Contenidos [ctor] .
+ op _,_ : Contenidos Contenidos -> Contenidos [ctor assoc comm id: emptyCont] .
+
+*** ----- Lista de mensajes ----- 
+
+ op emptyMsj : -> ListaMsj [ctor] .
+ op __ : ListaMsj ListaMsj -> ListaMsj [ctor assoc id: emptyMsj] .
+
+*** ----- Lista de amigos ----- 
+
+ op alone : -> ListaId [ctor] .
+ op __ : ListaId ListaId -> ListaId [ctor assoc comm id: alone] .
+
+*** ----- Tabla Hash ----- 
+
+ op emptyHash : -> Hash [ctor] .
+ op __ : Hash Hash -> Hash [ctor assoc comm id: emptyHash] .
+
+*** ----- Localización ----- 
+
+ op {_|_} : Nat Contenidos -> Localizacion [ctor] .
+
+*** ----- Socket ----- 
+
+ op <_|_;_|_> : Nat ListaMsj ListaMsj Nat -> Socket [ctor] .
+
+*** ----- Nodos ----- 
+
+ op ex(_|_|_|_|_) : Id Nat Estado ListaId String -> Nodo [ctor].
+ op in(_|_|_) : Id Hash Estado -> Nodo [ctor].
+
+*** ----- Mensajes ----- 
+
+ op info(_,_|_) : Nat Nat Id -> Msj [ctor].
+ op resp(_) : Id -> Msj [ctor].
+ op to(_-_) : Id String -> Msj [ctor].
+ 
+***__________________________________________________________________________________________________________________
+
+ var L : Localizacion .
+ var S : Sistema .
+
+ op numNodos : Sistema -> Nat .
+ eq numNodos(S) = 0 [owise] .
+ eq numNodos(L S) = 1 + numNodos(S) .
+
+endfm
+
+
+***__________________________________________________________________________________________________________________***
+***__________________________________________________________________________________________________________________***
+***__________________________________________________________________________________________________________________***
+***__________________________________________________________________________________________________________________***
+
+
+mod COMPORTAMIENTO is
+ pr NAT .
+ pr STRING .
+ pr RED .
+
+ var N N' N'' : Nat .
+ var S S' : String .
+ var E E' : Estado .
+ var ID ID' ID'' : Id .
+ var H : Hash .
+ var LId : ListaId .
+ var LMex LMin : ListaMsj .
+ var C C' : Contenidos .
+
+
+*** __________________________________________________________________________________________________________________
+
+
+ *** ----- Enviar de nodo exterior al socket ----- 
+
+ crl [enviaEx] : { N | ex( ID | N' | activo | LId | S ) , to( ID'' - S' ) , C } < N | LMex ; LMin | N' > =>
+ { N | ex( ID | N' | activo | LId | S ) , C } < N | LMex ; LMin to( ID'' - S' ) | N' >
+ if ( N =/= N' ) /\ ( ID =/= ID'' ) .
+
+*** ----- Leer del socket al centro ----- 
+
+ crl [leeIn] : { N' | in( ID' | H | activo ) , C' } < N | LMex ; to( ID'' - S' ) LMin | N' > =>
+ { N' | in( ID' | H | activo ) , to( ID'' - S' ), C' } < N | LMex ; LMin | N' >
+ if ( N =/= N' ) /\ ( ID' =/= ID'' ) .
+ 
+ *** ----- Enviar del centro al socket ----- 
+
+ crl [enviaIn] : { N' | in( ID' | [ ID'' - N ] H | activo ) , to( ID'' - S' ), C' } < N | LMex ; LMin | N' > =>
+ { N' | in( ID' | [ ID'' - N ] H | activo ) , C' } < N | LMex to( ID'' - S' ) ; LMin | N' >
+ if ( N =/= N' ) /\ ( ID' =/= ID'' ) .
+
+*** ----- Leer desde el nodo exterior ----- 
+
+ crl [leeEx] : { N | ex( ID | N' | activo | LId | S ) , C } < N | to( ID - S' ) LMex ; LMin | N' > =>
+ { N | ex( ID | N' | activo | LId | S ) , to( ID - S' ) , C }  < N | LMex ; LMin | N' >
+ if ( N =/= N' ) .
+
+ *** ----- Procesar mensaje en el nodo ----- 
+
+ crl [procesa] : { N | ex( ID | N' | activo | LId | S ) , to( ID - S' ) , C } =>
+ { N | ex( ID | N' | activo | LId | S + S' ) , C } 
+ if ( N =/= N' ) .
+
+
+*** __________________________________________________________________________________________________________________
+
+
+*** ----- Un nodo inactivo pide conexion al centro ----- 
+
+ crl [pideConexion] : { N | ex( ID | N' | inactivo | LId | S ) , C } < N | LMex ; LMin | N' > =>
+ { N | ex( ID | N' | esperando | LId | S ) , C } < N | LMex ; LMin info( N' , N | ID ) | N' >
+ if ( N =/= N' ) .
+
+*** ----- El centro lee la solicitud de conexión ----- 
+
+ crl [leeConexion] : { N' | in( ID' | H | E' ) , C' } < N | LMex ; info( N' , N | ID ) LMin | N' > =>
+ { N' | in( ID' | H | E' ) , info( N' , N | ID ) , C' } < N | LMex ; LMin | N' >
+ if ( N =/= N' ) /\ ( ID =/= ID' ) .
+
+*** ----- El centro se activa, actualiza la tabla y envia la respuesta ----- 
+
+ crl [enviaRespuesta] : { N' | in( ID' | H | E' ) , info( N' , N | ID ) , C' } < N | LMex ; LMin | N' > =>
+ { N' | in( ID' | [ ID - N ] H | activo ) , C' } < N | LMex resp( ID ) ; LMin | N' >
+ if ( N =/= N' ) /\ ( ID =/= ID' ) .
+
+*** ----- El nodo exterior lee la respuesta del socket
+ ----- 
+ crl [leeRespuesta] : { N | ex( ID | N' | esperando | LId | S ) , C } < N | resp( ID ) LMex ; LMin | N' > =>
+ { N | ex( ID | N' | esperando | LId | S ) , resp( ID ) , C } < N | LMex ; LMin | N' >
+ if ( N =/= N' ) .
+
+*** ----- El nodo se activa al procesar la respuesta ----- 
+
+ crl [activa] : { N | ex( ID | N' | esperando | LId | S ) , resp( ID ), C } =>
+ { N | ex( ID | N' | activo | LId | S ) , C }
+ if ( N =/= N' ) .
+
+
+*** __________________________________________________________________________________________________________________
+
+
+*** ----- Crea el mensaje de saludo para un amigo ----- 
+
+ crl [saluda] : { N | ex( ID | N' | activo | ID'' LId  | S ) , C } =>
+ { N | ex( ID | N' | activo | LId | S ) , to( ID'' - "hola" ), C }
+ if ( N =/= N' ) .
+
+endm
+
+
+***__________________________________________________________________________________________________________________***
+***__________________________________________________________________________________________________________________***
+***__________________________________________________________________________________________________________________***
+***__________________________________________________________________________________________________________________***
+
+
+mod EJEMPLO is
+ pr RED .
+ pr COMPORTAMIENTO .
+
+ op init : -> Sistema .
+
+ eq init = 	{ 1 | ex( id( 11 ) | 666 | inactivo | id( 22 ) id( 33 ) | "" ) }
+ 			{ 2 | ex( id( 22 ) | 666 | inactivo | id( 11 ) id( 33 ) | "" ) }
+ 			{ 3 | ex( id( 33 ) | 666 | inactivo | id( 11 ) id( 22 ) | "" ) }
+ 			{ 666 | in( id( 44 ) | emptyHash | inactivo ) }
+ 			< 1 | emptyMsj ; emptyMsj | 666 >
+ 			< 2 | emptyMsj ; emptyMsj | 666 >
+ 			< 3 | emptyMsj ; emptyMsj | 666 > .
+endm
+
+rew init .
+
+search init =>* S:Sistema s.t. numNodos(S:Sistema) =/= numNodos(init) .
+
+
+***__________________________________________________________________________________________________________________***
+***__________________________________________________________________________________________________________________***
+***__________________________________________________________________________________________________________________***
+***__________________________________________________________________________________________________________________***
+
+
+load model-checker
+
+mod PROPS is
+ pr SATISFACTION .
+ pr RED .
+ pr COMPORTAMIENTO .
+
+ subsort Sistema < State .
+
+ var N N' : Nat .
+ var S S' : String .
+ var E : Estado .
+ var M : Msj .
+ var ID ID' : Id .
+ var H : Hash .
+ var LId : ListaId .
+ var LMex LMin LMex' LMin' : ListaMsj .
+ var C : Contenidos .
+ var Sis : Sistema .
+
+*** ----- Comprueba si existe un nodo con cierto ID ----- 
+
+ op existe : Id -> Prop [ctor] .
+ ceq { N | ex( ID | N' | E | LId | S ) , C } Sis |= existe(ID) = true
+ if ( N =/= N' ) .
+ eq { N' | in( ID | H | E ) , C } Sis |= existe(ID) = true .
+
+*** ----- Comprueba si un nodo ID es amigo de un nodo ID'----- 
+
+ op amigo : Id Id -> Prop [ctor] .
+ ceq { N | ex( ID' | N' | E | ID LId | S ) , C } Sis |= amigo(ID,ID') = true 
+ if ( ID =/= ID' ) /\ ( N =/= N' ) .
+
+*** ----- Comprueba si hay algun mensaje to para un nodo con cierto ID ----- 
+
+ op toMsj : Id -> Prop [ctor] .
+ eq { N' | in( ID' | H | E ) , to( ID - S' ) , C } Sis |= toMsj(ID) = true .				*** En nodo interior
+ ceq { N | ex( ID' | N' | E | LId | S ) , to( ID - S' ) , C } Sis |= toMsj(ID) = true		
+ if ( N =/= N' ) .																			*** En nodo exterior
+ ceq < N | LMex to( ID - S' ) LMex' ; LMin | N' > Sis |= toMsj(ID) = true					*** En socket dirigido a un nodo
+ if ( N =/= N' ) .
+ ceq < N | LMex ; LMin to( ID - S' ) LMin' | N' > Sis |= toMsj(ID) = true					*** En socket dirigido al centro
+ if ( N =/= N' ) .
+
+*** ----- Comprueba si hay un número de nodos ----- 
+
+ op hay : Nat -> Prop [ctor] .
+ eq Sis |= hay(N) = numNodos(Sis) == N .
+
+*** ----- Comprueba si un socket esta vacío ----- 
+
+ op socketVacio : Nat Nat -> Prop [ctor] .
+ ceq < N | emptyMsj ; emptyMsj | N' > Sis |= socketVacio(N,N') = true
+ if ( N =/= N' ) .
+
+*** ----- Comprueba si hay un número de nodos exteriores ----- 
+
+ op numEx : Nat -> Prop [ctor] .
+ eq Sis |= numEx(N) = numNodos(Sis) == s(N) .
+
+endm
+
+
+***__________________________________________________________________________________________________________________***
+***__________________________________________________________________________________________________________________***
+***__________________________________________________________________________________________________________________***
+***__________________________________________________________________________________________________________________***
+
+
+mod TEST is
+pr LTL-SIMPLIFIER .
+pr MODEL-CHECKER .
+pr PROPS .
+pr EJEMPLO .
+
+endm
+
+red modelCheck ( init, [] ( hay(4) /\ numEx(3) ) ) .
+red modelCheck ( init, [] ( ( existe(ID:Id) /\ amigo( ID:Id , ID':Id ) ) -> <> toMsj(ID:Id) ) ) .
+red modelCheck ( init, [] ( toMsj(ID:Id) -> <> ( ~ [] (toMsj(ID:Id)) ) ) ) .
+
+eof
+
+
+***__________________________________________________________________________________________________________________***
+***__________________________________________________________________________________________________________________***
+***__________________________________________________________________________________________________________________***
+***__________________________________________________________________________________________________________________***
+
+
+*** (
+
+APARTADO 20:
+
+En los mensajes de tipo "to" podríamos añadir dos parámetro adicionales:
+- Un parámetro "from" indicaría el nodo que ha envíado dicho mensaje.
+- Un parámetro "state" se correpondería con el estado del mensaje.
+	- "sent" para los mensajes recién enviados.
+	- "reply" si se trata de la respuesta.
+RESULTADO: to (IDdst - String | IDsrc | tipo)
+
+En el procesamiento del mensaje:
+Deberemos distinguir entre dos casos según sea un mensaje nuevo o se trate de una respuesta. En caso de un mensaje nuevo se procesará y se enviará la respuesta al nodo que figure en el parámetro "from". Si es una respuesta solamente se procesará.
+
+Propiedad:
+
+Debemos adaptar la propiedad toMsj definidad anteriormente para que incluya los nuevos parámetros.
+También deberíamos definir la propiedad toRsp para comprobar si existe la respuesta al correspondiente mensaje to.
+A partir de ahora debemos tener en cuenta el contenido del mensaje para distinguir entre las respuestas a un mismo emisor.
+
+[] ( toMsj(ID:Id,ID':Id,S:String) -> <> ( ~ [] (toMsj(ID:Id,ID':Id,S:String)) /\ toRsp(ID:Id,ID':Id,S:String) ) )
+
+) ***			
